@@ -21,7 +21,16 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/session/:sessionId" element={<SessionView />} />
-            <Route path="/reset-password" element={<div className="min-h-screen flex items-center justify-center bg-gray-50 p-4"><div className="w-full max-w-md"><ResetPasswordForm /></div></div>} />
+            <Route
+              path="/reset-password"
+              element={
+                <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+                  <div className="w-full max-w-md">
+                    <ResetPasswordForm />
+                  </div>
+                </div>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
