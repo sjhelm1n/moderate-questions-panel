@@ -214,7 +214,10 @@ export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({ session 
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as any)}>
+          <Tabs
+            value={filter}
+            onValueChange={(value) => setFilter(value as 'all' | 'submitted' | 'approved' | 'asked' | 'ignore')}
+          >
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="all">All ({counts.total})</TabsTrigger>
               <TabsTrigger value="submitted">Submitted ({counts.submitted})</TabsTrigger>

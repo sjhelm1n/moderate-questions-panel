@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { Question } from './useSupabase';
 import { useOptimisticVoting } from './useOptimisticVoting';
@@ -10,15 +11,25 @@ interface VoteUpdate {
   source: 'server' | 'optimistic';
 }
 
+interface QuestionRow {
+  id: string;
+  session_id: string;
+  content: string;
+  status?: Question['status'];
+  submitter_name?: string;
+  vote_count?: number;
+  created_at: string;
+}
+
 export function useEnhancedRealTimeVoting(sessionId: string) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [voteUpdates, setVoteUpdates] = useState<Map<string, VoteUpdate>>(new Map());
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   
-  const channelRef = useRef<any>(null);
-  const animationTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  const reconnectTimeout = useRef<NodeJS.Timeout>();
-  const heartbeatInterval = useRef<NodeJS.Timeout>();
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const animationTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const heartbeatInterval = useRef<ReturnType<typeof setInterval>>();
   
   const {
     voteStates,
@@ -30,7 +41,7 @@ export function useEnhancedRealTimeVoting(sessionId: string) {
   } = useOptimisticVoting(sessionId);
 
   // Enhanced question transformation with vote state integration
-  const transformQuestions = useCallback((data: any[]) => {
+  const transformQuestions = useCallback((data: QuestionRow[] | null) => {
     return (data || []).map(q => {
       const voteState = voteStates.get(q.id);
       return {
@@ -85,7 +96,7 @@ export function useEnhancedRealTimeVoting(sessionId: string) {
   }, [sessionId, transformQuestions, sortQuestionsByVotes, initializeVoteState]);
 
   // Enhanced vote update handler with conflict resolution
-  const handleVoteUpdate = useCallback((payload: any) => {
+  const handleVoteUpdate = useCallback((payload: RealtimePostgresChangesPayload<QuestionRow>) => {
     const questionId = payload.new.id;
     const serverVoteCount = payload.new.vote_count || 0;
     
@@ -240,6 +251,7 @@ export function useEnhancedRealTimeVoting(sessionId: string) {
   // Setup subscription
   useEffect(() => {
     setupRealtimeSubscription();
+    const timeouts = animationTimeouts.current;
     
     return () => {
       if (channelRef.current) {
@@ -251,8 +263,8 @@ export function useEnhancedRealTimeVoting(sessionId: string) {
       if (heartbeatInterval.current) {
         clearInterval(heartbeatInterval.current);
       }
-      animationTimeouts.current.forEach(timeout => clearTimeout(timeout));
-      animationTimeouts.current.clear();
+      timeouts.forEach(timeout => clearTimeout(timeout));
+      timeouts.clear();
     };
   }, [setupRealtimeSubscription]);
 

@@ -97,6 +97,7 @@ CREATE POLICY "Anyone can update vote counts"
   TO anon, authenticated
   USING (true)
   WITH CHECK (true);
+`;
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
 export interface ApprovedQuestion {
@@ -8,6 +9,16 @@ export interface ApprovedQuestion {
   status: 'approved' | 'asked';  // Now includes both approved and asked
   submitter_name?: string;
   vote_count: number;
+  created_at: string;
+}
+
+interface ApprovedQuestionRow {
+  id: string;
+  session_id: string;
+  content: string;
+  status: 'approved' | 'asked';
+  submitter_name?: string | null;
+  vote_count?: number | null;
   created_at: string;
 }
 
@@ -24,7 +35,7 @@ export function useApprovedQuestions(sessionId: string) {
   const [questions, setQuestions] = useState<ApprovedQuestion[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const mounted = useRef(true);
-  const channelRefs = useRef<any[]>([]);
+  const channelRefs = useRef<RealtimeChannel[]>([]);
 
   const fetchApprovedAndAsked = useCallback(async () => {
     if (!sessionId) return;
@@ -44,7 +55,7 @@ export function useApprovedQuestions(sessionId: string) {
       
       if (!mounted.current) return;
 
-      const mapped = (data || []).map((q: any) => ({
+      const mapped = ((data as ApprovedQuestionRow[] | null) || []).map((q) => ({
         id: q.id,
         session_id: q.session_id,
         text: q.content,
@@ -91,7 +102,7 @@ export function useApprovedQuestions(sessionId: string) {
         { event: 'INSERT', schema: 'public', table: 'questions', filter: `session_id=eq.${sessionId}` },
         (payload) => {
           if (!mounted.current) return;
-          const q = payload.new as any;
+          const q = payload.new as ApprovedQuestionRow;
           
           // Only handle approved and asked questions
           if (q.status === 'approved' || q.status === 'asked') {
@@ -124,8 +135,8 @@ export function useApprovedQuestions(sessionId: string) {
         { event: 'UPDATE', schema: 'public', table: 'questions', filter: `session_id=eq.${sessionId}` },
         (payload) => {
           if (!mounted.current) return;
-          const oldRow: any = (payload as any).old;
-          const newRow: any = payload.new;
+          const oldRow = payload.old as ApprovedQuestionRow;
+          const newRow = payload.new as ApprovedQuestionRow;
 
           // Handle transitions to/from approved/asked
           if (newRow.status === 'approved' || newRow.status === 'asked') {

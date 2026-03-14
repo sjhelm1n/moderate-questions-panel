@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { AuthError, Subscription, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/errors";
 
 /** Match your DB schema */
 export type UserRole = "moderator" | "audience";
@@ -13,6 +14,8 @@ export interface UserProfile {
   created_at?: string | null;
   updated_at?: string | null;
 }
+
+type SignOutResult = { error: AuthError | null };
 
 /**
  * useAuth
@@ -98,9 +101,9 @@ export function useAuth() {
       }
       setProfile(p);
       setError(null);
-    } catch (e: any) {
+    } catch (e) {
       console.error("Auth hydrate error:", e);
-      setError(e?.message ?? "Failed to load authentication state");
+      setError(getErrorMessage(e, "Failed to load authentication state"));
       // Clear auth state on error
       setUser(null);
       setProfile(null);
@@ -110,7 +113,7 @@ export function useAuth() {
   /** Initial load + auth change listener */
   useEffect(() => {
     let active = true;
-    let authSubscription: any = null;
+    let authSubscription: Subscription | null = null;
 
     const initializeAuth = async () => {
       if (!active) return;
@@ -128,7 +131,7 @@ export function useAuth() {
 
     // Set up auth state change listener
     const setupAuthListener = () => {
-      authSubscription = supabase.auth.onAuthStateChange(
+      const { data } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           if (!active) return;
           
@@ -149,9 +152,9 @@ export function useAuth() {
                     }
                     setProfile(p);
                     setError(null);
-                  } catch (e: any) {
+                  } catch (e) {
                     console.error("Profile fetch error:", e);
-                    setError(e?.message ?? "Failed to load user profile");
+                    setError(getErrorMessage(e, "Failed to load user profile"));
                   }
                 }
                 break;
@@ -181,6 +184,7 @@ export function useAuth() {
           }
         }
       );
+      authSubscription = data.subscription;
     };
 
     // Initialize auth and set up listener
@@ -192,11 +196,9 @@ export function useAuth() {
 
     return () => {
       active = false;
-      if (authSubscription) {
-        authSubscription.subscription?.unsubscribe();
-      }
+      authSubscription?.unsubscribe();
     };
-  }, []); // Empty dependency array to prevent infinite loops
+  }, [hydrate, fetchUserProfile, upsertUserProfile]);
 
   /** Sign out and reset local state */
   const signOut = useCallback(async () => {
@@ -207,11 +209,11 @@ export function useAuth() {
       
       // Use a timeout to prevent hanging
       const signOutPromise = supabase.auth.signOut();
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Sign out timeout')), 5000)
       );
       
-      const result = await Promise.race([signOutPromise, timeoutPromise]);
+      const result = await Promise.race<SignOutResult | never>([signOutPromise, timeoutPromise]);
       console.log("useAuth: Supabase signOut result:", result);
       
       if (result && 'error' in result && result.error) {
@@ -229,7 +231,7 @@ export function useAuth() {
       console.log("useAuth: Local state cleared, redirecting to home");
       // Force a page reload to ensure clean state
       window.location.href = "/";
-    } catch (e: any) {
+    } catch (e) {
       console.error("useAuth: Sign out error:", e);
       
       // Even if signOut fails, clear local state and redirect

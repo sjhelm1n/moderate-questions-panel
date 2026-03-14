@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Mail, AlertCircle, CheckCircle } from 'lucide-react';
+import { getErrorMessage } from '@/lib/errors';
 
 interface ForgotPasswordFormProps {
   onBack: () => void;
@@ -30,8 +31,8 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
       if (error) throw error;
 
       setSuccess(true);
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      setError(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

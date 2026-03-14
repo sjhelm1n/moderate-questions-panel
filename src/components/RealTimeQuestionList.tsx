@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MessageCircle, TrendingUp, Users } from 'lucide-react';
-import { useRealtimeSession } from '@/hooks/useRealtimeSession';
+import { useApprovedQuestions } from '@/hooks/useApprovedQuestions';
+import type { ApprovedQuestion } from '@/hooks/useApprovedQuestions';
 import { RealTimeVotingQuestionCard } from './RealTimeVotingQuestionCard';
 import { QuestionCard } from './QuestionCard';
 
@@ -22,7 +23,7 @@ const EmptyState = React.memo(() => (
 ));
 
 const LiveVotingSection = React.memo<{
-  questions: any[];
+  questions: ApprovedQuestion[];
   sessionId: string;
 }>(({ questions, sessionId }) => (
   <Card>
@@ -53,7 +54,7 @@ const LiveVotingSection = React.memo<{
 ));
 
 const AskedQuestionsSection = React.memo<{
-  questions: any[];
+  questions: ApprovedQuestion[];
 }>(({ questions }) => (
   <Card>
     <CardHeader>
@@ -77,14 +78,16 @@ const AskedQuestionsSection = React.memo<{
 ));
 
 export const RealTimeQuestionList: React.FC<RealTimeQuestionListProps> = React.memo(({ sessionId }) => {
-  const { questions } = useRealtimeSession(sessionId, { approvedOnly: true });
+  const { questions } = useApprovedQuestions(sessionId);
 
   // Memoize filtered questions to avoid recalculation on every render
-  const { visibleQuestions, askedQuestions } = useMemo(() => {
+  const { approvedQuestions, visibleQuestions, askedQuestions } = useMemo(() => {
+    const approved = questions.filter(q => q.status === 'approved');
     const visible = questions.filter(q => q.status === 'approved' || q.status === 'asked');
     const asked = questions.filter(q => q.status === 'asked');
     
     return {
+      approvedQuestions: approved,
       visibleQuestions: visible,
       askedQuestions: asked
     };
@@ -97,9 +100,9 @@ export const RealTimeQuestionList: React.FC<RealTimeQuestionListProps> = React.m
   return (
     <div className="space-y-6">
       {/* Live Voting Section */}
-      {questions.length > 0 && (
+      {approvedQuestions.length > 0 && (
         <LiveVotingSection
-          questions={questions}
+          questions={approvedQuestions}
           sessionId={sessionId}
         />
       )}

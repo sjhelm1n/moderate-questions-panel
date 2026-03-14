@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/lib/supabase';
 import { LogIn, UserPlus, AlertCircle } from 'lucide-react';
 import { ForgotPasswordForm } from './ForgotPasswordForm';
+import { getErrorMessage } from '@/lib/errors';
 
 interface ModalAuthFormProps {
   onSuccess: () => void;
@@ -54,8 +55,8 @@ export function ModalAuthForm({ onSuccess }: ModalAuthFormProps) {
 
             if (profileError) throw profileError;
             onSuccess();
-          } catch (profileError: any) {
-            setError(profileError.message);
+          } catch (profileError) {
+            setError(getErrorMessage(profileError));
           }
         } else {
           setSuccessMessage(
@@ -66,8 +67,8 @@ export function ModalAuthForm({ onSuccess }: ModalAuthFormProps) {
           setFullName('');
         }
       }
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      setError(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -93,8 +94,8 @@ export function ModalAuthForm({ onSuccess }: ModalAuthFormProps) {
         await new Promise(resolve => setTimeout(resolve, 500));
         onSuccess();
       }
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      setError(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

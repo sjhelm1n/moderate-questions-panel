@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,7 +20,7 @@ const SessionItem = React.memo<{
   onSelect: (id: string) => void;
   onClose: (id: string) => Promise<void>;
   onCopyLink: (id: string) => void;
-  user: any;
+  user: User | null;
   showClosed: boolean;
   statusClasses: (status: string) => string;
 }>(({ session, onSelect, onClose, onCopyLink, user, showClosed, statusClasses }) => (
@@ -113,7 +114,12 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({ curre
   const [sessionDescription, setSessionDescription] = useState('');
   const [showClosed, setShowClosed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const loadedViewsRef = useRef({ active: false, closed: false });
   const navigate = useNavigate();
+
+  useEffect(() => {
+    loadedViewsRef.current = { active: false, closed: false };
+  }, [user?.id]);
 
   // Memoized status classes function
   const statusClasses = useCallback((s: string) =>
@@ -154,15 +160,24 @@ export const SessionManager: React.FC<SessionManagerProps> = React.memo(({ curre
   useEffect(() => {
     const run = async () => {
       if (!user || !isModerator) return;
-      setLoading(true);
+      const targetView = showClosed ? 'closed' : 'active';
+      const hasLoadedTargetView = loadedViewsRef.current[targetView];
+
+      if (!hasLoadedTargetView) {
+        setLoading(true);
+      }
+
       try {
         await fetchSessions(user.id, showClosed);
+        loadedViewsRef.current[targetView] = true;
       } finally {
-        setLoading(false);
+        if (!hasLoadedTargetView) {
+          setLoading(false);
+        }
       }
     };
     run();
-  }, [user?.id, isModerator, showClosed, fetchSessions]);
+  }, [user, isModerator, showClosed, fetchSessions]);
 
   // Memoized create session handler
   const handleCreateSession = useCallback(async (e: React.FormEvent) => {

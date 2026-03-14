@@ -1,19 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, Clock, ArrowLeft, MessageCircle, BarChart3 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Question, useSupabase } from '@/hooks/useSupabase';
 import { QuestionSubmissionForm } from './QuestionSubmissionForm';
 import { RealTimeQuestionList } from './RealTimeQuestionList';
 import { LiveConnectionStatus } from './LiveConnectionStatus';
 import { ModeratorDashboard } from './ModeratorDashboard';
 import SignOutButton from './SignOutButton';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import type { Session } from '@/hooks/useSupabase';
 import FeedbackDashboard from './FeedbackDashboard';
 import { SessionFeedbackForm } from './SessionFeedbackForm';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
@@ -21,84 +18,17 @@ import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 export const SessionView: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { user, isModerator } = useAuth(); // Move useAuth to top
-  const { questions, fetchQuestions } = useSupabase();
-  const { session: realtimeSession } = useRealtimeSession(sessionId || '', { 
+  const { user, isModerator } = useAuth();
+  const {
+    session,
+    questions,
+    loading,
+    error,
+  } = useRealtimeSession(sessionId || '', {
     approvedOnly: false,
     fetchMyVotes: false
   });
-  
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'questions' | 'feedback'>('questions');
-
-  useEffect(() => {
-    const fetchSession = async () => {
-      if (!sessionId) {
-        setError('Session ID not provided');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('id', sessionId)
-          .single();
-
-        if (fetchError) {
-          setError('Session not found');
-        } else {
-          setSession(data);
-          await fetchQuestions(data.id);
-        }
-      } catch (err) {
-        setError('Failed to load session');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSession();
-  }, [sessionId, fetchQuestions]);
-
-  // Set up real-time subscription for session status changes
-  useEffect(() => {
-    if (sessionId) {
-      console.log('SessionView: Setting up real-time subscription for session status');
-      
-      const sessionChannel = supabase
-        .channel(`session_status_${sessionId}`)
-        .on('postgres_changes', 
-          { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'sessions',
-            filter: `id=eq.${sessionId}`
-          }, 
-          (payload) => {
-            console.log('Session status updated in SessionView:', payload);
-            // Update the session state with new status
-            setSession(prev => prev ? { ...prev, status: payload.new.status } : null);
-          }
-        )
-        .subscribe();
-
-      return () => {
-        console.log('SessionView: Cleaning up session status subscription');
-        supabase.removeChannel(sessionChannel);
-      };
-    }
-  }, [sessionId]);
-
-  // Poll questions with reduced frequency since we have real-time updates
-  useEffect(() => {
-    if (!session?.id) return;
-    const interval = setInterval(() => fetchQuestions(session.id), 5000); // Reduced from 3 seconds
-    return () => clearInterval(interval);
-  }, [session?.id, fetchQuestions]);
 
   if (loading) {
     return (
@@ -172,7 +102,11 @@ export const SessionView: React.FC = () => {
         </nav>
 
         <div className="container mx-auto px-4 py-8">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as 'questions' | 'feedback')}
+            className="space-y-6"
+          >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="questions" className="flex items-center gap-2">
                 <MessageCircle className="w-4 h-4" />
@@ -195,6 +129,10 @@ export const SessionView: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  if (session.status === 'ended' || session.status === 'closed') {
+    return <SessionFeedbackForm sessionId={session.id} sessionName={session.name} />;
   }
 
   // Audience view (participants)
@@ -236,32 +174,23 @@ export const SessionView: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Submission + Feedback */}
+          {/* Submission */}
           {session.status === 'active' ? (
             <div className="mb-8">
               <QuestionSubmissionForm sessionId={session.id} sessionStatus={session.status} />
             </div>
           ) : (
-            <>
-              <Card className="mb-8">
-                <CardContent className="p-6 text-center">
-                  <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Session {session.status === 'paused' ? 'Paused' : 'Ended'}
-                  </h3>
-                  <p className="text-gray-600">
-                    {session.status === 'paused'
-                      ? 'Question submission is temporarily paused. You can still leave feedback below.'
-                      : 'This session has ended. We’d still love your feedback below.'}
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Feedback prompt for participants */}
-              <div className="mb-8">
-                <SessionFeedbackForm sessionId={session.id} sessionName={session.name} />
-              </div>
-            </>
+            <Card className="mb-8">
+              <CardContent className="p-6 text-center">
+                <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Session Paused
+                </h3>
+                <p className="text-gray-600">
+                  Question submission is temporarily paused.
+                </p>
+              </CardContent>
+            </Card>
           )}
 
           {/* Real-time Questions with Live Voting */}

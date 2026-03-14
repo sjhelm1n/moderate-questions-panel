@@ -216,9 +216,10 @@ export function useOptimisticVoting(sessionId: string) {
 
   // Cleanup timeouts
   useEffect(() => {
+    const timeouts = retryTimeouts.current;
     return () => {
-      retryTimeouts.current.forEach(timeout => clearTimeout(timeout));
-      retryTimeouts.current.clear();
+      timeouts.forEach(timeout => clearTimeout(timeout));
+      timeouts.clear();
     };
   }, []);
 

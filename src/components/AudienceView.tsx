@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import { useApprovedQuestions } from '@/hooks/useApprovedQuestions'; // <- new
 interface AudienceViewProps {
   sessionId: string;
 }
+
+type SessionPayload = RealtimePostgresChangesPayload<Session>;
 
 export const AudienceView: React.FC<AudienceViewProps> = ({ sessionId }) => {
   const [session, setSession] = useState<Session | null>(null);
@@ -63,7 +66,8 @@ export const AudienceView: React.FC<AudienceViewProps> = ({ sessionId }) => {
       .channel(`session_${sessionId}`)
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'sessions', filter: `id=eq.${sessionId}` },
-        (payload) => setSession((prev) => (prev ? { ...prev, ...(payload.new as any) } : (payload.new as Session)))
+        (payload: SessionPayload) =>
+          setSession((prev) => (prev ? { ...prev, ...payload.new } : payload.new))
       )
       .subscribe();
     return () => { supabase.removeChannel(ch); };

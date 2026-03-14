@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { Question } from './useSupabase';
 
@@ -8,14 +9,24 @@ interface VoteUpdate {
   timestamp: number;
 }
 
+interface QuestionRow {
+  id: string;
+  session_id: string;
+  content: string;
+  status?: Question['status'];
+  submitter_name?: string;
+  vote_count?: number;
+  created_at: string;
+}
+
 export function useRealTimeVoting(sessionId: string) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [voteUpdates, setVoteUpdates] = useState<Map<string, VoteUpdate>>(new Map());
-  const channelRef = useRef<any>(null);
-  const animationTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const animationTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Memoized question transformation function
-  const transformQuestions = useCallback((data: any[]) => {
+  const transformQuestions = useCallback((data: QuestionRow[] | null) => {
     return (data || []).map(q => ({
       id: q.id,
       session_id: q.session_id,
@@ -52,7 +63,7 @@ export function useRealTimeVoting(sessionId: string) {
   }, [sessionId, transformQuestions]);
 
   // Optimized vote update handler
-  const handleVoteUpdate = useCallback((payload: any) => {
+  const handleVoteUpdate = useCallback((payload: RealtimePostgresChangesPayload<QuestionRow>) => {
     console.log('Real-time vote update:', payload);
     const questionId = payload.new.id;
     const newVoteCount = payload.new.vote_count || 0;
@@ -106,6 +117,7 @@ export function useRealTimeVoting(sessionId: string) {
   // Set up real-time subscription with cleanup
   useEffect(() => {
     if (!sessionId) return;
+    const timeouts = animationTimeouts.current;
 
     // Clean up existing channel
     if (channelRef.current) {
@@ -135,8 +147,8 @@ export function useRealTimeVoting(sessionId: string) {
         supabase.removeChannel(channelRef.current);
       }
       // Clear all timeouts
-      animationTimeouts.current.forEach(timeout => clearTimeout(timeout));
-      animationTimeouts.current.clear();
+      timeouts.forEach(timeout => clearTimeout(timeout));
+      timeouts.clear();
     };
   }, [sessionId, handleVoteUpdate, handleNewVote]);
 

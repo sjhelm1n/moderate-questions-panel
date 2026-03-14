@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, User, Clock } from 'lucide-react';
 import { Question, useSupabase } from '@/hooks/useSupabase';
+import { getErrorMessage } from '@/lib/errors';
 
 interface VotingQuestionCardProps {
   question: Question;
@@ -17,14 +18,14 @@ const VotingQuestionCard: React.FC<VotingQuestionCardProps> = ({ question, sessi
   const { voteOnQuestion, fetchQuestions, subscribeToVotes, unsubscribeFromVotes } = useSupabase();
 
   // Generate or get voter ID
-  const getVoterId = () => {
+  const getVoterId = useCallback(() => {
     const existingVoterId = localStorage.getItem(`voter_${sessionId}`);
     if (existingVoterId) return existingVoterId;
     
     const newVoterId = `voter_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     localStorage.setItem(`voter_${sessionId}`, newVoterId);
     return newVoterId;
-  };
+  }, [sessionId]);
 
   // Check if user has already voted on this question
   useEffect(() => {
@@ -36,7 +37,7 @@ const VotingQuestionCard: React.FC<VotingQuestionCardProps> = ({ question, sessi
     };
 
     checkVoteStatus();
-  }, [question.id, sessionId]);
+  }, [question.id, sessionId, getVoterId]);
 
   // Update vote count when question prop changes
   useEffect(() => {
@@ -62,9 +63,9 @@ const VotingQuestionCard: React.FC<VotingQuestionCardProps> = ({ question, sessi
     const voterId = getVoterId();
     
     try {
-      const success = await voteOnQuestion(question.id, sessionId, voterId);
+      const result = await voteOnQuestion(question.id, sessionId, voterId);
       
-      if (success) {
+      if (result.ok) {
         console.log('Vote successful, updating UI');
         setHasVoted(true);
         setCurrentVoteCount(prev => prev + 1);
@@ -80,12 +81,11 @@ const VotingQuestionCard: React.FC<VotingQuestionCardProps> = ({ question, sessi
         }, 500);
       } else {
         console.log('Vote failed');
-        // Show user feedback that vote failed
-        alert('Failed to save your vote. Please try again.');
+        alert(getErrorMessage(result.error, 'Failed to save your vote. Please try again.'));
       }
     } catch (error) {
       console.error('Error during voting:', error);
-      alert('Failed to save your vote. Please try again.');
+      alert(getErrorMessage(error, 'Failed to save your vote. Please try again.'));
     }
     
     setIsVoting(false);
@@ -140,6 +140,7 @@ const VotingQuestionCard: React.FC<VotingQuestionCardProps> = ({ question, sessi
       </CardContent>
     </Card>
   );
+};
 
 export { VotingQuestionCard };
 export default VotingQuestionCard;

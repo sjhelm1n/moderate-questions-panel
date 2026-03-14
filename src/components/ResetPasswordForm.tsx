@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/lib/supabase';
 import { Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getErrorMessage } from '@/lib/errors';
 
 export function ResetPasswordForm() {
   const [password, setPassword] = useState('');
@@ -58,8 +59,8 @@ export function ResetPasswordForm() {
       setTimeout(() => {
         navigate('/');
       }, 3000);
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      setError(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

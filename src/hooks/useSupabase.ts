@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from './useAuth';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 export interface Session {
   id: string;
@@ -21,16 +21,72 @@ export interface Question {
   created_at: string;
 }
 
+interface QuestionRow {
+  id: string;
+  session_id: string;
+  content: string;
+  status: Question['status'];
+  submitter_name?: string | null;
+  vote_count?: number | null;
+  created_at: string;
+}
+
+interface SessionFeedbackRow {
+  id: string;
+  session_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  sessions?: {
+    name?: string;
+  } | null;
+}
+
+interface FetchSessionsOptions {
+  force?: boolean;
+}
 
 export function useSupabase() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
-  const [realtimeChannel, setRealtimeChannel] = useState<any>(null);
+  const [realtimeChannel, setRealtimeChannel] = useState<RealtimeChannel | null>(null);
+  const sessionCacheRef = useRef(new Map<string, Session[]>());
+  const lastSessionQueryRef = useRef<{ moderatorId?: string; includeClosed: boolean } | null>(null);
+
+  const getSessionCacheKey = useCallback((moderatorId?: string, includeClosed = false) => {
+    return `${moderatorId ?? 'all'}:${includeClosed ? 'closed' : 'active'}`;
+  }, []);
+
+  const invalidateSessionCache = useCallback((moderatorId?: string) => {
+    if (!moderatorId) {
+      sessionCacheRef.current.clear();
+      return;
+    }
+
+    for (const key of Array.from(sessionCacheRef.current.keys())) {
+      if (key.startsWith(`${moderatorId}:`)) {
+        sessionCacheRef.current.delete(key);
+      }
+    }
+  }, []);
   
   // Memoized fetch sessions function
-  const fetchSessions = useCallback(async (moderatorId?: string, includeClosed: boolean = false) => {
+  const fetchSessions = useCallback(async (
+    moderatorId?: string,
+    includeClosed: boolean = false,
+    options: FetchSessionsOptions = {}
+  ) => {
     console.log('Fetching sessions...', { moderatorId, includeClosed });
+    lastSessionQueryRef.current = { moderatorId, includeClosed };
+
+    const cacheKey = getSessionCacheKey(moderatorId, includeClosed);
+    const cachedSessions = sessionCacheRef.current.get(cacheKey);
+    if (cachedSessions && !options.force) {
+      setSessions(cachedSessions);
+      return cachedSessions;
+    }
+
     let query = supabase
       .from('sessions')
       .select('*')
@@ -52,14 +108,17 @@ export function useSupabase() {
     
     if (error) {
       console.error('Error fetching sessions:', error);
-      return;
+      return [];
     }
     console.log('Sessions fetched:', data?.length || 0);
-    setSessions(data || []);
-  }, []);
+    const nextSessions = data || [];
+    sessionCacheRef.current.set(cacheKey, nextSessions);
+    setSessions(nextSessions);
+    return nextSessions;
+  }, [getSessionCacheKey]);
 
   // Memoized question transformation
-  const transformQuestions = useCallback((data: any[]) => {
+  const transformQuestions = useCallback((data: QuestionRow[] | null) => {
     return (data || []).map(q => ({
       id: q.id,
       session_id: q.session_id,
@@ -124,9 +183,10 @@ export function useSupabase() {
     }
     
     console.log('Session created successfully:', data);
-    await fetchSessions();
+    invalidateSessionCache(user.id);
+    await fetchSessions(user.id, false, { force: true });
     return data;
-  }, [fetchSessions]);
+  }, [fetchSessions, invalidateSessionCache]);
 
   // Optimized submit question function
   const submitQuestion = useCallback(async (sessionId: string, content: string, submitterName?: string) => {
@@ -214,16 +274,17 @@ export function useSupabase() {
       return false;
     }
     console.log('Session closed successfully');
-    await fetchSessions();
+    invalidateSessionCache(user.id);
+    await fetchSessions(user.id, true, { force: true });
     return true;
-  }, [fetchSessions]);
+  }, [fetchSessions, invalidateSessionCache]);
 
   // Optimized vote function
   const voteOnQuestion = useCallback(async (
     questionId: string,
     sessionId: string,
     voterId: string
-  ): Promise<{ ok: boolean; count?: number; error?: any }> => {
+  ): Promise<{ ok: boolean; count?: number; error?: unknown }> => {
     console.log('=== VOTING WITH RPC START ===');
     console.log('Question ID:', questionId);
     console.log('Session ID:', sessionId);
@@ -366,7 +427,7 @@ export function useSupabase() {
         return [];
       }
       
-      const transformedFeedback = (data || []).map(f => ({
+      const transformedFeedback = ((data as SessionFeedbackRow[] | null) || []).map(f => ({
         id: f.id,
         session_id: f.session_id,
         rating: f.rating,
@@ -388,20 +449,20 @@ export function useSupabase() {
     const channel = supabase
       .channel('sessions')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
-        console.log('Sessions table changed, refreshing...');
-        fetchSessions();
+        const lastQuery = lastSessionQueryRef.current;
+        if (!lastQuery?.moderatorId) {
+          return;
+        }
+        console.log('Sessions table changed, refreshing current moderator sessions...');
+        invalidateSessionCache(lastQuery.moderatorId);
+        fetchSessions(lastQuery.moderatorId, lastQuery.includeClosed, { force: true });
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchSessions]);
-
-  // Initial fetch with optimization
-  useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+  }, [fetchSessions, invalidateSessionCache]);
 
   // Memoized return value
   return useMemo(() => ({

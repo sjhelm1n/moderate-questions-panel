@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getErrorMessage } from "@/lib/errors";
 
 /** Table types (adjust to your schema if different) */
 export type QuestionStatus = "submitted" | "approved" | "ignore" | "asked";
@@ -158,9 +159,9 @@ export function useRealtimeSession(
           fetchMyVotesForSession(sessionId),
         ]);
         if (!cancelled) setLoading(false);
-      } catch (e: any) {
+      } catch (e) {
         if (!cancelled) {
-          setError(e?.message ?? "Failed to load session");
+          setError(getErrorMessage(e, "Failed to load session"));
           setLoading(false);
         }
       }

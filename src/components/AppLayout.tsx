@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import type { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,7 +31,7 @@ const FeatureCard = React.memo<{
 
 // Memoized navigation component
 const Navigation = React.memo<{
-  user: any;
+  user: User | null;
   isModerator: boolean;
   onShowAuth: () => void;
 }>(({ user, isModerator, onShowAuth }) => (
@@ -101,7 +102,7 @@ const FeaturesGrid = React.memo(() => (
 
 // Memoized get started section
 const GetStartedSection = React.memo<{
-  user: any;
+  user: User | null;
   onShowAuth: () => void;
 }>(({ user, onShowAuth }) => (
   <Card>

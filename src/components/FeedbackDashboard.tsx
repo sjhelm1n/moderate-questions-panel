@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -36,11 +36,7 @@ export const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId 
   const [ratingFilter, setRatingFilter] = useState('all');
   const [sessionFilter, setSessionFilter] = useState('all');
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) return;
     
     setLoading(true);
@@ -59,7 +55,11 @@ export const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId 
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, sessionId, fetchSessionFeedback, fetchSessions]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Apply filters (when sessionId is provided, session filter is not needed)
   const filteredFeedback = feedback.filter(f => {

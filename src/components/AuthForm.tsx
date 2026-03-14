@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/lib/supabase';
 import { LogIn, UserPlus, AlertCircle } from 'lucide-react';
 import { ForgotPasswordForm } from './ForgotPasswordForm';
+import { getErrorMessage } from '@/lib/errors';
 
 interface AuthFormProps {
   onSuccess: () => void;
@@ -56,8 +57,8 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
 
             if (profileError) throw profileError;
             onSuccess();
-          } catch (profileError: any) {
-            setError(profileError.message);
+          } catch (profileError) {
+            setError(getErrorMessage(profileError));
           }
         } else {
           // User needs to confirm email
@@ -70,8 +71,8 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
           setFullName('');
         }
       }
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      setError(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -101,9 +102,9 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
         await new Promise(resolve => setTimeout(resolve, 500));
         onSuccess();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Sign in error:", error);
-      setError(error.message);
+      setError(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
