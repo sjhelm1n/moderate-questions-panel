@@ -11,7 +11,7 @@ interface QRCodeDisplayProps {
   size?: number;
 }
 
-export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
+const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   value,
   title = "QR Code",
   description,

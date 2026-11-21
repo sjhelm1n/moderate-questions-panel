@@ -18,7 +18,7 @@ interface FeedbackFiltersProps {
   totalResults: number;
 }
 
-export const FeedbackFilters: React.FC<FeedbackFiltersProps> = ({
+const FeedbackFilters: React.FC<FeedbackFiltersProps> = ({
   dateRange,
   onDateRangeChange,
   ratingFilter,

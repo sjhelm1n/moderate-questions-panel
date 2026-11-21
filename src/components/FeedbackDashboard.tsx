@@ -1,65 +1,38 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Star, Calendar, MessageSquare } from 'lucide-react';
-import { useSupabase } from '@/hooks/useSupabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useFeedback } from '@/hooks/useFeedback';
+import { useSessions } from '@/hooks/useSessions';
+import { serializeCsvRow } from '@/lib/csv';
+import type { SessionFeedback } from '@/types/domain';
 import FeedbackAnalytics from './FeedbackAnalytics';
 import FeedbackFilters from './FeedbackFilters';
-
-interface FeedbackData {
-  id: string;
-  session_id: string;
-  rating: number;
-  comment?: string;
-  created_at: string;
-  session_name?: string;
-}
 
 interface FeedbackDashboardProps {
   sessionId?: string; // Optional: if provided, show feedback only for this session
 }
 
-export const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId }) => {
+const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId }) => {
   const { user } = useAuth();
-  const { fetchSessionFeedback, fetchSessions } = useSupabase();
-  const [feedback, setFeedback] = useState<FeedbackData[]>([]);
-  const [sessions, setSessions] = useState<Array<{ id: string; name: string }>>([]);
-  const [loading, setLoading] = useState(true);
+  const feedbackQuery = useFeedback(user?.id, sessionId);
+  const sessionsQuery = useSessions(user?.id, true);
+  const feedback: SessionFeedback[] = feedbackQuery.data ?? [];
+  const sessions = sessionId ? [] : sessionsQuery.sessions;
   
   // Filter states
-  const [dateRange, setDateRange] = useState({
-    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
+  const [dateRange, setDateRange] = useState(() => {
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - 30);
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+    };
   });
   const [ratingFilter, setRatingFilter] = useState('all');
   const [sessionFilter, setSessionFilter] = useState('all');
-
-  const loadData = useCallback(async () => {
-    if (!user) return;
-    
-    setLoading(true);
-    try {
-      // If sessionId is provided, fetch feedback only for that session
-      // Otherwise, fetch all feedback for the moderator
-      const [feedbackData, sessionsData] = await Promise.all([
-        fetchSessionFeedback(user.id, sessionId),
-        sessionId ? [] : fetchSessions(user.id, true) // Only fetch sessions list if not filtering by specific session
-      ]);
-      
-      setFeedback(feedbackData || []);
-      setSessions(sessionsData || []);
-    } catch (error) {
-      console.error('Error loading feedback data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, sessionId, fetchSessionFeedback, fetchSessions]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // Apply filters (when sessionId is provided, session filter is not needed)
   const filteredFeedback = feedback.filter(f => {
@@ -80,17 +53,19 @@ export const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId 
   const exportFeedback = () => {
     if (filteredFeedback.length === 0) return;
     
-    const csvHeader = 'Session,Rating,Comment,Date\n';
+    const csvHeader = serializeCsvRow(['Session', 'Rating', 'Comment', 'Date']);
     const csvContent = filteredFeedback
       .map(f => {
-        const sessionName = (f.session_name || 'Unknown Session').replace(/"/g, '""');
-        const comment = (f.comment || '').replace(/"/g, '""');
-        const date = new Date(f.created_at).toLocaleString();
-        return `"${sessionName}",${f.rating},"${comment}","${date}"`;
+        return serializeCsvRow([
+          f.session_name || 'Unknown Session',
+          f.rating,
+          f.comment || '',
+          new Date(f.created_at).toLocaleString(),
+        ]);
       })
       .join('\n');
 
-    const blob = new Blob([csvHeader + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([`${csvHeader}\n${csvContent}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -99,6 +74,7 @@ export const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const renderStars = (rating: number) => {
@@ -112,8 +88,12 @@ export const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId 
     ));
   };
 
-  if (loading) {
+  if (feedbackQuery.isLoading || (!sessionId && sessionsQuery.loading)) {
     return <div className="flex justify-center p-8">Loading feedback data...</div>;
+  }
+
+  if (feedbackQuery.error || (!sessionId && sessionsQuery.error)) {
+    return <div className="p-8 text-center text-red-700">Feedback data could not be loaded.</div>;
   }
 
   return (
@@ -149,65 +129,46 @@ export const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ sessionId 
         />
       )}
 
-      <Tabs defaultValue="list" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="list">Feedback List ({filteredFeedback.length})</TabsTrigger>
-          <TabsTrigger value="trends">Trends & Analysis</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="list" className="space-y-4">
-          {filteredFeedback.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-500">No feedback found for the selected filters.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            filteredFeedback.map((f) => (
-              <Card key={f.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        {renderStars(f.rating)}
-                        <Badge variant="outline">{f.rating}/5</Badge>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        {f.session_name || 'Unknown Session'}
-                      </p>
-                    </div>
-                    <div className="text-right text-sm text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {new Date(f.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
-                  {f.comment && (
-                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm">{f.comment}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
-
-        <TabsContent value="trends">
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Feedback List ({filteredFeedback.length})</h3>
+        {filteredFeedback.length === 0 ? (
           <Card>
-            <CardHeader>
-              <CardTitle>Coming Soon</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Trend analysis and advanced analytics features will be available in a future update.
-              </p>
+            <CardContent className="text-center py-8">
+              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <p className="text-gray-500">No feedback found for the selected filters.</p>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        ) : (
+          filteredFeedback.map((f) => (
+            <Card key={f.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      {renderStars(f.rating)}
+                      <Badge variant="outline">{f.rating}/5</Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {f.session_name || 'Unknown Session'}
+                    </p>
+                  </div>
+                  <div className="text-right text-sm text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(f.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+                {f.comment && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm">{f.comment}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
 };

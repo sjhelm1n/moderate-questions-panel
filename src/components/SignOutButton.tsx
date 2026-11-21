@@ -1,18 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/hooks/use-toast';
+import { getErrorMessage } from '@/lib/errors';
 
-export const SignOutButton: React.FC = () => {
-  const { signOut, loading } = useAuth();
+const SignOutButton: React.FC = () => {
+  const { signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
   
   const handleSignOut = async () => {
-    console.log('SignOutButton: Sign out button clicked');
+    setSigningOut(true);
     try {
       await signOut();
-      console.log('SignOutButton: Sign out completed');
     } catch (error) {
-      console.error('SignOutButton: Sign out error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Unable to sign out',
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setSigningOut(false);
     }
   };
 
@@ -22,10 +30,10 @@ export const SignOutButton: React.FC = () => {
       variant="outline"
       size="sm"
       className="flex items-center gap-2"
-      disabled={loading}
+      disabled={signingOut}
     >
       <LogOut className="w-4 h-4" />
-      {loading ? 'Signing Out...' : 'Sign Out'}
+      {signingOut ? 'Signing Out...' : 'Sign Out'}
     </Button>
   );
 };

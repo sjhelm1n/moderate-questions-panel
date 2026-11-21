@@ -7,15 +7,14 @@ import { Users, Clock, ArrowLeft, MessageCircle, BarChart3 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { QuestionSubmissionForm } from './QuestionSubmissionForm';
 import { RealTimeQuestionList } from './RealTimeQuestionList';
-import { LiveConnectionStatus } from './LiveConnectionStatus';
 import { ModeratorDashboard } from './ModeratorDashboard';
 import SignOutButton from './SignOutButton';
 import { useAuth } from '@/hooks/useAuth';
 import FeedbackDashboard from './FeedbackDashboard';
 import { SessionFeedbackForm } from './SessionFeedbackForm';
-import { useRealtimeSession } from '@/hooks/useRealtimeSession';
+import { useSessionData } from '@/hooks/useSessionData';
 
-export const SessionView: React.FC = () => {
+const SessionView: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { user, isModerator } = useAuth();
@@ -24,10 +23,7 @@ export const SessionView: React.FC = () => {
     questions,
     loading,
     error,
-  } = useRealtimeSession(sessionId || '', {
-    approvedOnly: false,
-    fetchMyVotes: false
-  });
+  } = useSessionData(sessionId || '', user?.id ?? 'anonymous');
   const [activeTab, setActiveTab] = useState<'questions' | 'feedback'>('questions');
 
   if (loading) {
@@ -119,7 +115,7 @@ export const SessionView: React.FC = () => {
             </TabsList>
 
             <TabsContent value="questions">
-              <ModeratorDashboard session={session} />
+              <ModeratorDashboard session={session} questions={questions} viewerId={user.id} />
             </TabsContent>
 
             <TabsContent value="feedback">
@@ -131,7 +127,7 @@ export const SessionView: React.FC = () => {
     );
   }
 
-  if (session.status === 'ended' || session.status === 'closed') {
+  if (session.status === 'ended') {
     return <SessionFeedbackForm sessionId={session.id} sessionName={session.name} />;
   }
 
@@ -154,7 +150,7 @@ export const SessionView: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center">
                 <div className="flex items-center gap-6 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
@@ -169,7 +165,6 @@ export const SessionView: React.FC = () => {
                     <span>{questions.length} questions submitted</span>
                   </div>
                 </div>
-                <LiveConnectionStatus sessionId={session.id} />
               </div>
             </CardContent>
           </Card>
@@ -194,7 +189,7 @@ export const SessionView: React.FC = () => {
           )}
 
           {/* Real-time Questions with Live Voting */}
-          <RealTimeQuestionList sessionId={session.id} />
+          <RealTimeQuestionList sessionId={session.id} questions={questions} />
         </div>
       </div>
     </div>

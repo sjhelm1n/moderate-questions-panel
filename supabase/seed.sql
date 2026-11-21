@@ -1,0 +1,3 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- Intentionally empty. Auth users should be created through Supabase Auth.
+-- Application records can then be created through the UI or test fixtures.

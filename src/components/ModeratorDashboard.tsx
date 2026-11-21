@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,38 +10,40 @@ import {
   MessageSquare,
   Clock,
   Users,
-  Copy,
   Download,
   ThumbsUp,
-  BarChart3
 } from 'lucide-react';
-import { useSupabase, Question, Session } from '@/hooks/useSupabase';
-import { useAuth } from '@/hooks/useAuth';
+import { useUpdateQuestionStatus } from '@/hooks/useQuestionMutations';
+import { useSessions } from '@/hooks/useSessions';
+import { serializeCsvRow } from '@/lib/csv';
+import type { Question, Session } from '@/types/domain';
 import QuestionCard from './QuestionCard';
 import QRCodeDisplay from './QRCodeDisplay';
 
 interface ModeratorDashboardProps {
   session: Session;
+  questions: Question[];
+  viewerId: string;
 }
 
-export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({ session }) => {
-  const { user } = useAuth();
+export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({
+  session,
+  questions,
+  viewerId,
+}) => {
   const navigate = useNavigate();
-  const { questions, fetchQuestions, updateQuestionStatus, closeSession } = useSupabase();
-
+  const updateQuestion = useUpdateQuestionStatus(session.id, viewerId);
+  const { endSession, ending } = useSessions(viewerId, false);
 
   const [filter, setFilter] = useState<'all' | 'submitted' | 'approved' | 'asked' | 'ignore'>('all');
 
-  useEffect(() => {
-    if (!session?.id) return;
-    fetchQuestions(session.id);
-    const interval = setInterval(() => fetchQuestions(session.id), 2000);
-    return () => clearInterval(interval);
-  }, [session?.id, fetchQuestions]);
-
   const handleStatusUpdate = async (questionId: string, status: Question['status']) => {
-    const success = await updateQuestionStatus(questionId, status);
-    if (success && session?.id) await fetchQuestions(session.id);
+    try {
+      await updateQuestion.mutateAsync({ questionId, status });
+    } catch (error) {
+      console.error('Failed to update question status', error);
+      window.alert('Failed to update the question. Please try again.');
+    }
   };
 
   // Sort: approved questions by vote count (descending), others by recency
@@ -74,15 +76,12 @@ export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({ session 
 
   const handleCloseSession = async () => {
     if (!confirm('Are you sure you want to close this session? This action cannot be undone.')) return;
-    const success = await closeSession(session.id);
-    if (success) {
-      alert('Session closed successfully!');
-      // Use React Router's navigate function for proper routing
-      setTimeout(() => {
-        navigate('/');
-      }, 1000);
-    } else {
-      alert('Failed to close session. Please try again.');
+    try {
+      await endSession(session.id);
+      navigate('/');
+    } catch (error) {
+      console.error('Failed to end session', error);
+      window.alert('Failed to end the session. Please try again.');
     }
   };
 
@@ -91,19 +90,20 @@ export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({ session 
       alert('No questions to download.');
       return;
     }
-    const csvHeader = 'Question,Author,Status,Votes,Created At\n';
+    const csvHeader = serializeCsvRow(['Question', 'Author', 'Status', 'Votes', 'Created At']);
     const csvContent = questions
       .map(q => {
-        const text = (q.text ?? q.content ?? '').replace(/"/g, '""');
-        const author = (q.submitter_name || 'Anonymous').replace(/"/g, '""');
-        const status = q.status;
-        const votes = q.vote_count ?? 0;
-        const createdAt = new Date(q.created_at).toLocaleString();
-        return `"${text}","${author}",${status},${votes},${createdAt}`;
+        return serializeCsvRow([
+          q.text,
+          q.submitter_name || 'Anonymous',
+          q.status,
+          q.vote_count ?? 0,
+          new Date(q.created_at).toLocaleString(),
+        ]);
       })
       .join('\n');
 
-    const blob = new Blob([csvHeader + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([`${csvHeader}\n${csvContent}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -117,6 +117,7 @@ export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({ session 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const audienceUrl = `${window.location.origin}/session/${session.id}?view=audience`;
@@ -133,8 +134,8 @@ export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({ session 
             {session.status}
           </Badge>
           {session.status === 'active' && (
-            <Button variant="destructive" size="sm" onClick={handleCloseSession}>
-              Close Session
+            <Button variant="destructive" size="sm" onClick={handleCloseSession} disabled={ending}>
+              {ending ? 'Ending…' : 'End Session'}
             </Button>
           )}
         </div>
@@ -252,5 +253,3 @@ export const ModeratorDashboard: React.FC<ModeratorDashboardProps> = ({ session 
     </div>
   );
 };
-
-export default ModeratorDashboard;

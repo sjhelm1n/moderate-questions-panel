@@ -1,127 +1,133 @@
-# Q&A Session Management Platform
+# Moderate Questions Panel
 
-A real-time question management system for panel discussions, conferences, and live Q&A sessions.
+An Apache-2.0 web application for moderating audience questions during panels, conferences, and community events. Moderators create sessions, review incoming questions, publish selected questions, track audience votes, export results, and review post-session feedback. Participants join from a shared link without creating an account.
 
 ## Features
 
-### For Moderators
-- **Session Management**: Create and manage multiple Q&A sessions
-- **Question Moderation**: Review and update question status (submitted → approved/ignored/asked)
-- **Voting System**: Participants can upvote approved questions
-- **Shareable URLs**: Generate unique URLs for each session that participants can access
-- **CSV Export**: Download all session questions with complete status information
-- **Real-time Updates**: Live synchronization of questions and status changes
+- Authenticated moderator accounts and owner-scoped session management
+- Anonymous question submission with a moderated public feed
+- One best-effort vote per browser-generated voter identifier
+- Supabase Realtime updates with a low-frequency recovery poll
+- QR-code session sharing and CSV exports
+- Post-session ratings and comments
+- Reproducible Supabase migrations, database tests, CI, and browser smoke tests
 
-### For Participants
-- **Easy Access**: Join sessions via shared URL without authentication
-- **Question Submission**: Submit questions with optional name
-- **Live Feed**: See approved and asked questions in real-time
-- **Session Status**: View active, paused, or ended session states
+## Stack
 
-## Getting Started
+- React 18, TypeScript, Vite 8, React Router 7, and TanStack Query
+- Tailwind CSS and a small set of Radix UI primitives
+- Supabase Postgres, Auth, Realtime, and Row Level Security
+- Vitest, pgTAP, Playwright, ESLint, and GitHub Actions
+
+## Quick start
 
 ### Prerequisites
-- Node.js 18+ and npm
-- Supabase account (for database and authentication)
 
-### Installation
+- Node.js 22.12 or newer and npm
+- Docker-compatible container runtime for the local Supabase stack
+- Supabase CLI, or allow the included `npx supabase` scripts to download it
 
-1. Clone the repository:
+### Local development
+
 ```bash
-git clone <repository-url>
-cd qa-session-platform
+git clone https://github.com/sjhelm1n/moderate-questions-panel.git
+cd moderate-questions-panel
+npm ci
+cp .env.example .env.local
+npm run db:start
+npm run db:reset
 ```
 
-2. Install dependencies:
-```bash
-npm install
+Run `npx --yes supabase@3.2.0 status` and copy its API URL and publishable/anonymous key into `.env.local`:
+
+```dotenv
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=your-local-publishable-key
 ```
 
-3. Set up environment variables:
-Create a `.env` file with your Supabase credentials:
-```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+Then start the app:
 
-4. Run the development server:
 ```bash
 npm run dev
 ```
 
-## Usage
+Vite serves the application at <http://127.0.0.1:8080>. Local email messages are available in Supabase's Mailpit interface at <http://127.0.0.1:54324>.
 
-### As a Moderator
+Moderator registration is invitation-only. Invite the first moderator through Supabase Studio's Authentication users page; the database trigger creates the matching moderator profile. A direct self-signup receives only the non-privileged audience role, even if hosted signup is accidentally enabled.
 
-1. **Sign Up/Login**: Create an account or login with existing credentials
-2. **Create Session**: Click "Create Session" and enter a session name
-3. **Share URL**: Copy the session URL and share with participants
-4. **Manage Questions**: 
-   - Review incoming questions in the "Submitted" tab
-   - Change status to "Approved" (visible to audience), "Ignored" (hidden), or "Asked" (marked as addressed)
-   - View vote counts to see which questions are most popular
+## Environment variables
 
-### As a Participant
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | Yes | Supabase project API URL. |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Browser-safe publishable or legacy anonymous key. Never use a service-role key. |
 
-1. **Access Session**: Open the shared URL in your browser
-2. **Submit Questions**: Enter your question and optionally provide your name
-3. **View Questions**: See approved and asked questions in real-time
+All `VITE_` variables are bundled into browser code and must be treated as public configuration.
 
-## Question Status Flow
+## Database and security model
 
+The canonical database is defined by [the Supabase migration](supabase/migrations/20261121004505_initial_open_source_schema.sql). It creates five public tables:
+
+- `user_profiles`: moderator profile linked to `auth.users`
+- `sessions`: moderator-owned event sessions
+- `questions`: submitted and moderated questions
+- `question_votes`: browser-identifier vote records
+- `session_feedback`: post-session ratings and comments
+
+Supabase Row Level Security is the authorization boundary. Anonymous users can read sessions, submit to active sessions through the restricted `submit_question` function, read only approved or asked questions, vote through the restricted `cast_vote` function, and submit feedback only after a session ends. Invited moderators can manage only sessions and related records they own.
+
+### Defense-in-depth abuse limits
+
+Anonymous participation is protected by several independent layers:
+
+| Layer | Enforced limits |
+| --- | --- |
+| Browser UI | Question text is limited to 500 characters, submitter names to 100 characters, and feedback comments to 2,000 characters. |
+| Public database functions | Questions are accepted only for active sessions, votes only for approved questions in active sessions, and feedback only after a session ends. Inputs are trimmed and validated again on the server. |
+| Per-browser database throttles | Five questions per session per minute, sixty vote attempts per session per minute, one vote per question, and one feedback response per session. Only SHA-256 hashes of browser identifiers are retained. |
+| Per-session database throttles | Question submissions and feedback submissions are each capped at 300 writes per session per minute, including requests from older clients. |
+| Database authorization | Row Level Security, narrow grants, foreign keys, checks, and transactional session-state validation protect records even when someone bypasses the web interface and calls the API directly. |
+
+These controls contain accidental loops and low-effort abuse, but a browser identifier is not proof of a person: a participant can clear browser storage, rotate identifiers, or distribute requests across devices. Internet-facing and high-profile deployments should add a final edge layer such as IP-based rate limiting, CAPTCHA or bot detection, request-size limits, and monitoring. See [SECURITY.md](SECURITY.md) and [docs/security-audit.md](docs/security-audit.md).
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the Vite development server. |
+| `npm run build` | Create the production bundle. |
+| `npm run lint` | Run ESLint. |
+| `npm run typecheck` | Run strict TypeScript checks. |
+| `npm test` | Run unit tests. |
+| `npm run test:coverage` | Run unit tests with coverage thresholds. |
+| `npm run test:e2e` | Run Playwright browser smoke tests. |
+| `npm run check` | Run lint, types, unit tests, and production build. |
+| `npm run db:start` | Start local Supabase services. |
+| `npm run db:reset` | Recreate the local database from migrations and seed data. |
+| `npm run db:test` | Run pgTAP database tests against local Supabase. |
+
+## Project structure
+
+```text
+src/components/          Application and reusable UI components
+src/hooks/               Auth, query, realtime, and mutation hooks
+src/services/supabase/   Typed database access modules
+src/types/               Database and domain types
+supabase/migrations/     Canonical database migrations
+supabase/tests/          pgTAP database contract tests
+e2e/                     Playwright browser smoke tests
+.github/                 CI, security analysis, templates, and ownership
+docs/                    Architecture, deployment, and security notes
 ```
-Submitted (initial) → Approved (visible to audience)
-                   → Ignored (hidden from audience)
-                   → Asked (marked as addressed)
-```
-
-## Technology Stack
-
-- **Frontend**: React 18 with TypeScript
-- **Styling**: Tailwind CSS with shadcn/ui components
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Supabase Auth
-- **Real-time**: Polling for live updates
-- **Routing**: React Router v6
 
 ## Deployment
 
-### Build for Production
-```bash
-npm run build
-```
+The repository includes a Vercel SPA rewrite and baseline security headers in `vercel.json`. A production deployment also requires a Supabase project with the migration applied and the correct Auth redirect URLs configured. Follow [docs/deployment.md](docs/deployment.md); do not expose database passwords or service-role credentials to Vite.
 
-### Deploy to Vercel/Netlify
-The application is configured for easy deployment to modern hosting platforms.
+## Contributing and support
 
-## Database Schema
-
-### Sessions Table
-- `id`: UUID (primary key)
-- `name`: Session name
-- `status`: active/paused/ended
-- `moderator_id`: Reference to user
-- `created_at`: Timestamp
-
-### Questions Table
-- `id`: UUID (primary key)
-- `session_id`: Reference to session
-- `content`: Question content
-- `submitter_name`: Optional name
-- `status`: submitted/approved/ignore/asked
-- `vote_count`: Number of upvotes
-- `created_at`: Timestamp
-
-### Question Votes Table
-- `id`: UUID (primary key)
-- `question_id`: Reference to question
-- `voter_id`: Anonymous voter identifier
-- `session_id`: Reference to session
-- `created_at`: Timestamp
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [GOVERNANCE.md](GOVERNANCE.md) before opening a pull request. Use [SUPPORT.md](SUPPORT.md) for help and [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
 ## License
 
-MIT License - feel free to use this project for your events and conferences.
+Licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution information.

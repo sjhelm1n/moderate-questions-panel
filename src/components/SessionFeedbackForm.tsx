@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Star, Send } from 'lucide-react';
-import { useSupabase } from '@/hooks/useSupabase';
+import { AlertCircle, Star, Send } from 'lucide-react';
+import { useSubmitFeedback } from '@/hooks/useFeedback';
+import { getErrorMessage } from '@/lib/errors';
 
 interface SessionFeedbackFormProps {
   sessionId: string;
@@ -19,7 +20,8 @@ export const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const { submitFeedback } = useSupabase();
+  const [error, setError] = useState<string | null>(null);
+  const submitFeedback = useSubmitFeedback(sessionId);
 
   const handleStarClick = (starRating: number) => {
     setRating(starRating);
@@ -34,13 +36,20 @@ export const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({
     if (rating === 0) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
-      const success = await submitFeedback(sessionId, rating, comment);
-      if (success) {
-        setIsSubmitted(true);
-      }
+      await submitFeedback.mutateAsync({ rating, comment: comment || undefined });
+      setIsSubmitted(true);
     } catch (error) {
       console.error('Error submitting feedback:', error);
+      const message = getErrorMessage(error);
+      setError(
+        message.includes('already been submitted')
+          ? 'Feedback has already been submitted from this browser.'
+          : message.includes('Rate limit exceeded')
+            ? 'The feedback form is busy. Please wait a minute and try again.'
+            : 'Feedback could not be submitted. Please try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -94,6 +103,8 @@ export const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({
                       onClick={() => handleStarClick(star)}
                       onMouseEnter={() => handleStarHover(star)}
                       onMouseLeave={() => setHoveredRating(0)}
+                      aria-label={`Rate ${star} out of 5`}
+                      aria-pressed={rating === star}
                     >
                       <Star
                         className={`w-8 h-8 ${
@@ -125,8 +136,12 @@ export const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   rows={4}
+                  maxLength={2000}
                   className="w-full resize-none text-base"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  {comment.length}/2000 characters
+                </p>
               </div>
 
               <Button
@@ -136,6 +151,12 @@ export const SessionFeedbackForm: React.FC<SessionFeedbackFormProps> = ({
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
               </Button>
+              {error && (
+                <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  {error}
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>

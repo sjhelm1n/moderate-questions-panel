@@ -1,22 +1,13 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Star, TrendingUp, MessageSquare } from 'lucide-react';
-
-interface FeedbackData {
-  id: string;
-  session_id: string;
-  rating: number;
-  comment?: string;
-  created_at: string;
-  session_name?: string;
-}
+import type { SessionFeedback } from '@/types/domain';
 
 interface FeedbackAnalyticsProps {
-  feedback: FeedbackData[];
+  feedback: SessionFeedback[];
 }
 
-export const FeedbackAnalytics: React.FC<FeedbackAnalyticsProps> = ({ feedback }) => {
+const FeedbackAnalytics: React.FC<FeedbackAnalyticsProps> = ({ feedback }) => {
   const totalFeedback = feedback.length;
   const averageRating = totalFeedback > 0 
     ? feedback.reduce((sum, f) => sum + f.rating, 0) / totalFeedback 

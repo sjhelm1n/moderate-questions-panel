@@ -1,8 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
 declare global {
   interface Window {
-    __sb__?: SupabaseClient;
+    __sb__?: SupabaseClient<Database>;
   }
 }
 
@@ -22,7 +23,7 @@ const anon = getRequiredEnv("VITE_SUPABASE_ANON_KEY");
 let client = window.__sb__;
 
 if (!client) {
-  client = createClient(url, anon, {
+  client = createClient<Database>(url, anon, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,

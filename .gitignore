@@ -23,5 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
 .codex
 .vscode
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+supabase/.branches
+supabase/.temp

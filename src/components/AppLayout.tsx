@@ -1,21 +1,24 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, MessageCircle, Shield, LogIn } from 'lucide-react';
+import { Users, MessageCircle, Shield, LogIn, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import SignOutButton from './SignOutButton';
 import ModalAuthForm from './ModalAuthForm';
 import SessionManager from './SessionManager';
 
-// Memoized feature card component
-const FeatureCard = React.memo<{
-  icon: React.ReactNode;
+const FeatureCard = ({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
   title: string;
   description: string;
-}>(({ icon, title, description }) => (
+}) => (
   <Card>
     <CardHeader>
       <CardTitle className="flex items-center gap-2">
@@ -27,14 +30,17 @@ const FeatureCard = React.memo<{
       <p className="text-gray-600">{description}</p>
     </CardContent>
   </Card>
-));
+);
 
-// Memoized navigation component
-const Navigation = React.memo<{
+const Navigation = ({
+  user,
+  isModerator,
+  onShowAuth,
+}: {
   user: User | null;
   isModerator: boolean;
   onShowAuth: () => void;
-}>(({ user, isModerator, onShowAuth }) => (
+}) => (
   <nav className="bg-white shadow-sm border-b">
     <div className="container mx-auto px-4 py-4">
       <div className="flex items-center justify-between">
@@ -64,10 +70,9 @@ const Navigation = React.memo<{
       </div>
     </div>
   </nav>
-));
+);
 
-// Memoized hero section
-const HeroSection = React.memo(() => (
+const HeroSection = () => (
   <div className="text-center mb-12">
     <h1 className="text-4xl font-bold text-gray-900 mb-4">
       Interactive Q&A Panel System
@@ -77,10 +82,9 @@ const HeroSection = React.memo(() => (
       Audience members can submit questions anonymously without signing in.
     </p>
   </div>
-));
+);
 
-// Memoized features grid
-const FeaturesGrid = React.memo(() => (
+const FeaturesGrid = () => (
   <div className="grid md:grid-cols-3 gap-6 mb-12">
     <FeatureCard
       icon={<Users className="w-5 h-5 text-blue-600" />}
@@ -98,13 +102,15 @@ const FeaturesGrid = React.memo(() => (
       description="Questions appear instantly for moderators. Approved questions are visible to the audience in real-time without page refresh."
     />
   </div>
-));
+);
 
-// Memoized get started section
-const GetStartedSection = React.memo<{
+const GetStartedSection = ({
+  user,
+  onShowAuth,
+}: {
   user: User | null;
   onShowAuth: () => void;
-}>(({ user, onShowAuth }) => (
+}) => (
   <Card>
     <CardHeader>
       <CardTitle>Get Started</CardTitle>
@@ -122,15 +128,22 @@ const GetStartedSection = React.memo<{
       )}
     </CardContent>
   </Card>
-));
+);
 
-// Memoized auth modal
-const AuthModal = React.memo<{
+const AuthModal = ({
+  onSuccess,
+  onCancel,
+}: {
   onSuccess: () => void;
   onCancel: () => void;
-}>(({ onSuccess, onCancel }) => (
+}) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg max-w-md w-full relative max-h-[90vh] overflow-y-auto">
+    <div
+      className="bg-white rounded-lg max-w-md w-full relative max-h-[90vh] overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-dialog-title"
+    >
       {/* X Close Button */}
       <button
         onClick={onCancel}
@@ -145,8 +158,8 @@ const AuthModal = React.memo<{
       {/* Auth Form Container */}
       <div className="p-6 pt-12">
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Panel Discussion Platform</h2>
-          <p className="text-gray-600 mt-2">Sign in to manage your sessions or create an account</p>
+          <h2 id="auth-dialog-title" className="text-2xl font-bold text-gray-900">Panel Discussion Platform</h2>
+          <p className="text-gray-600 mt-2">Sign in with your invited moderator account</p>
         </div>
         <ModalAuthForm onSuccess={onSuccess} />
       </div>
@@ -162,28 +175,14 @@ const AuthModal = React.memo<{
       </div>
     </div>
   </div>
-));
+);
 
-const AppLayout: React.FC = () => {
-  const { user, isModerator, loading } = useAuth();
-  const location = useLocation();
+const AppLayout = () => {
+  const { user, isModerator, loading, error } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
 
-  // Memoized handlers
-  const handleShowAuth = useCallback(() => setShowAuth(true), []);
-  const handleHideAuth = useCallback(() => setShowAuth(false), []);
-
-  // Memoized location check
-  const shouldShowLayout = useMemo(() => 
-    !location.pathname.startsWith('/session/'),
-    [location.pathname]
-  );
-
-  // Don't show app layout on session view pages
-  if (!shouldShowLayout) {
-    return null;
-  }
-
+  const handleShowAuth = () => setShowAuth(true);
+  const handleHideAuth = () => setShowAuth(false);
   // Show loading state while auth is initializing
   if (loading) {
     return (
@@ -206,6 +205,12 @@ const AppLayout: React.FC = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
+        {error && (
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+            <span>{error}</span>
+          </div>
+        )}
         <HeroSection />
         <FeaturesGrid />
 

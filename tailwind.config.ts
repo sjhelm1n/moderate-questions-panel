@@ -1,6 +1,5 @@
 import type { Config } from "tailwindcss";
 import animate from "tailwindcss-animate";
-import typography from "@tailwindcss/typography";
 
 export default {
   darkMode: ["class"],
@@ -66,8 +65,8 @@ export default {
         }
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'monospace'],
-        sans: ['Inter', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       borderRadius: {
         lg: 'calc(var(--radius) + 2px)',
@@ -98,17 +97,9 @@ export default {
         'fade-in': 'fade-in 0.3s ease-out',
         'slide-in': 'slide-in 0.3s ease-out',
       },
-      typography: {
-        DEFAULT: {
-          css: {
-            maxWidth: 'none',
-          },
-        },
-      },
     }
   },
   plugins: [
     animate,
-    typography,
   ],
 } satisfies Config;

@@ -4,7 +4,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Send, CheckCircle, AlertCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { useSubmitQuestion } from '@/hooks/useQuestionMutations';
+import { getErrorMessage } from '@/lib/errors';
 
 interface QuestionSubmissionFormProps {
   sessionId: string;
@@ -16,9 +17,10 @@ export const QuestionSubmissionForm: React.FC<QuestionSubmissionFormProps> = ({ 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submitQuestion = useSubmitQuestion(sessionId);
 
   // Don't allow submission for closed sessions
-  if (sessionStatus === 'ended' || sessionStatus === 'closed') {
+  if (sessionStatus === 'ended') {
     return (
       <Card className="border-red-200 bg-red-50">
         <CardContent className="p-6 text-center">
@@ -40,35 +42,21 @@ export const QuestionSubmissionForm: React.FC<QuestionSubmissionFormProps> = ({ 
     setError(null);
     
     try {
-      // Direct submission to Supabase without authentication
-      const { data, error: submitError } = await supabase
-        .from('questions')
-        .insert([{ 
-          session_id: sessionId, 
-          content: question.trim(), 
-          submitter_name: submitterName.trim() || 'Anonymous',
-          status: 'submitted',
-          vote_count: 0
-        }])
-        .select()
-        .single();
-      
-      if (submitError) {
-        console.error('Submission error:', submitError);
-        setError('Failed to submit question. Please try again.');
-      } else {
-        console.log('Question submitted:', data);
-        setQuestion('');
-        setSubmitterName('');
-        setIsSubmitted(true);
-        
-        setTimeout(() => {
-          setIsSubmitted(false);
-        }, 3000);
-      }
+      await submitQuestion.mutateAsync({
+        content: question,
+        submitterName: submitterName || undefined,
+      });
+      setQuestion('');
+      setSubmitterName('');
+      setIsSubmitted(true);
     } catch (err) {
       console.error('Error submitting question:', err);
-      setError('An unexpected error occurred. Please try again.');
+      const message = getErrorMessage(err);
+      setError(
+        message.includes('Rate limit exceeded')
+          ? 'You have submitted several questions recently. Please wait a minute and try again.'
+          : 'Failed to submit your question. The session may no longer be active.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -166,5 +154,3 @@ export const QuestionSubmissionForm: React.FC<QuestionSubmissionFormProps> = ({ 
     </Card>
   );
 };
-
-export default QuestionSubmissionForm;

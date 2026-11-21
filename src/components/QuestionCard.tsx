@@ -1,9 +1,9 @@
-import React, { useMemo, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle, MessageSquare, Clock, User, ArrowUp } from 'lucide-react';
-import { Question } from '@/hooks/useSupabase';
+import type { Question } from '@/types/domain';
 
 interface QuestionCardProps {
   question: Question;
@@ -11,7 +11,6 @@ interface QuestionCardProps {
   showActions?: boolean;
 }
 
-// Memoized status color function
 const getStatusColor = (status: Question['status']) => {
   switch (status) {
     case 'submitted': return 'bg-yellow-100 text-yellow-800';
@@ -22,8 +21,7 @@ const getStatusColor = (status: Question['status']) => {
   }
 };
 
-// Memoized status icon function
-const getStatusIcon = (status: Question['status']) => {
+const getStatusIcon = (status: Question['status']): ReactNode => {
   switch (status) {
     case 'submitted': return <Clock className="w-4 h-4" />;
     case 'approved': return <CheckCircle className="w-4 h-4" />;
@@ -33,11 +31,13 @@ const getStatusIcon = (status: Question['status']) => {
   }
 };
 
-// Memoized question metadata component
-const QuestionMetadata = React.memo<{
+const QuestionMetadata = ({
+  createdAt,
+  submitterName,
+}: {
   createdAt: string;
-  submitterName?: string;
-}>(({ createdAt, submitterName }) => (
+  submitterName: string | null;
+}) => (
   <div className="flex items-center gap-4 text-sm text-gray-500">
     <span>{new Date(createdAt).toLocaleString()}</span>
     {submitterName && (
@@ -47,50 +47,26 @@ const QuestionMetadata = React.memo<{
       </div>
     )}
   </div>
-));
+);
 
-// Memoized vote count component
-const VoteCount = React.memo<{
+const VoteCount = ({ voteCount }: {
   voteCount: number;
-}>(({ voteCount }) => (
+}) => (
   voteCount > 0 ? (
     <div className="flex items-center gap-2 text-sm text-gray-600">
       <ArrowUp className="w-4 h-4" />
       <span>{voteCount} {voteCount === 1 ? 'vote' : 'votes'}</span>
     </div>
   ) : null
-));
+);
 
-// Memoized action buttons component
-const ActionButtons = React.memo<{
+const ActionButtons = ({
+  question,
+  onStatusUpdate,
+}: {
   question: Question;
   onStatusUpdate: (questionId: string, status: Question['status']) => void;
-}>(({ question, onStatusUpdate }) => {
-  const handleApprove = useCallback(() => {
-    console.log('QuestionCard: Status button clicked - approve', question.id);
-    onStatusUpdate(question.id, 'approved');
-  }, [question.id, onStatusUpdate]);
-
-  const handleIgnore = useCallback(() => {
-    console.log('QuestionCard: Status button clicked - ignore', question.id);
-    onStatusUpdate(question.id, 'ignore');
-  }, [question.id, onStatusUpdate]);
-
-  const handleMarkAsked = useCallback(() => {
-    console.log('QuestionCard: Status button clicked - mark as asked', question.id);
-    onStatusUpdate(question.id, 'asked');
-  }, [question.id, onStatusUpdate]);
-
-  const handleBackToApproved = useCallback(() => {
-    console.log('QuestionCard: Status button clicked - back to approved', question.id);
-    onStatusUpdate(question.id, 'approved');
-  }, [question.id, onStatusUpdate]);
-
-  const handleBackToSubmitted = useCallback(() => {
-    console.log('QuestionCard: Status button clicked - back to submitted', question.id);
-    onStatusUpdate(question.id, 'submitted');
-  }, [question.id, onStatusUpdate]);
-
+}) => {
   return (
     <div className="flex gap-2 flex-wrap mt-4">
       {question.status === 'submitted' && (
@@ -98,7 +74,7 @@ const ActionButtons = React.memo<{
           <Button 
             size="sm" 
             variant="outline" 
-            onClick={handleApprove}
+            onClick={() => onStatusUpdate(question.id, 'approved')}
             className="text-green-600"
           >
             <CheckCircle className="w-4 h-4 mr-1" />Approve
@@ -106,7 +82,7 @@ const ActionButtons = React.memo<{
           <Button 
             size="sm" 
             variant="outline" 
-            onClick={handleIgnore}
+            onClick={() => onStatusUpdate(question.id, 'ignore')}
             className="text-red-600"
           >
             <XCircle className="w-4 h-4 mr-1" />Ignore
@@ -116,7 +92,7 @@ const ActionButtons = React.memo<{
       {question.status === 'approved' && (
         <Button 
           size="sm" 
-          onClick={handleMarkAsked}
+          onClick={() => onStatusUpdate(question.id, 'asked')}
           className="bg-blue-600"
         >
           <MessageSquare className="w-4 h-4 mr-1" />Mark as Asked
@@ -127,7 +103,7 @@ const ActionButtons = React.memo<{
           <Button 
             size="sm" 
             variant="outline" 
-            onClick={handleBackToApproved}
+            onClick={() => onStatusUpdate(question.id, 'approved')}
             className="text-green-600"
           >
             <CheckCircle className="w-4 h-4 mr-1" />Back to Approved
@@ -135,7 +111,7 @@ const ActionButtons = React.memo<{
           <Button 
             size="sm" 
             variant="outline" 
-            onClick={handleIgnore}
+            onClick={() => onStatusUpdate(question.id, 'ignore')}
             className="text-red-600"
           >
             <XCircle className="w-4 h-4 mr-1" />Ignore
@@ -146,7 +122,7 @@ const ActionButtons = React.memo<{
         <Button 
           size="sm" 
           variant="outline" 
-          onClick={handleBackToSubmitted}
+          onClick={() => onStatusUpdate(question.id, 'submitted')}
           className="text-yellow-600"
         >
           <Clock className="w-4 h-4 mr-1" />Back to Submitted
@@ -154,20 +130,19 @@ const ActionButtons = React.memo<{
       )}
     </div>
   );
-});
+};
 
-const QuestionCard: React.FC<QuestionCardProps> = React.memo(({ 
+const QuestionCard = ({
   question, 
   onStatusUpdate, 
   showActions = false 
-}) => {
-  // Memoized status badge
-  const statusBadge = useMemo(() => (
+}: QuestionCardProps) => {
+  const statusBadge = (
     <Badge className={`${getStatusColor(question.status)} flex items-center gap-1`}>
       {getStatusIcon(question.status)}
       <span className="capitalize">{question.status}</span>
     </Badge>
-  ), [question.status]);
+  );
 
   return (
     <Card className="transition-shadow hover:shadow-md">
@@ -204,7 +179,7 @@ const QuestionCard: React.FC<QuestionCardProps> = React.memo(({
       </CardContent>
     </Card>
   );
-});
+};
 
 export { QuestionCard };
 export default QuestionCard;

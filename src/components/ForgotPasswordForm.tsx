@@ -25,7 +25,7 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
       });
 
       if (error) throw error;
@@ -55,7 +55,7 @@ export function ForgotPasswordForm({ onBack }: ForgotPasswordFormProps) {
             <Alert className="border-green-200 bg-green-50">
               <Mail className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
-                Click the link in your email to reset your password. The link will expire in 1 hour.
+                Click the link in your email to reset your password. Expiration is controlled by your Supabase Auth configuration.
               </AlertDescription>
             </Alert>
             <Button 
